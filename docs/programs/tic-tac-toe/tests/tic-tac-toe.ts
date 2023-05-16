@@ -4,7 +4,11 @@ import { TicTacToe } from '../target/types/tic_tac_toe';
 import chai from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import { expect } from 'chai';
+import { randomBytes } from 'node:crypto';
 chai.use(chaiAsPromised);
+
+const secretKey = require('../target/deploy/tic_tac_toe-keypair.json');
+const programKey = anchor.web3.Keypair.fromSecretKey(Uint8Array.from(secretKey));
 
 async function play(program: Program<TicTacToe>, game, player, tile, expectedTurn, expectedGameState, expectedBoard) {
   await program.methods
@@ -31,20 +35,22 @@ describe('tic-tac-toe', () => {
   const program = anchor.workspace.TicTacToe as Program<TicTacToe>;
   const programProvider = program.provider as anchor.AnchorProvider;
 
-  it('setup game!', async() => {
-    const gameKeypair = anchor.web3.Keypair.generate();
+  it.only('setup game!', async() => {
+    //const gameKeypair = anchor.web3.Keypair.generate();
+    const gameId = Math.random().toString();
+    const [gamePubKey] = await anchor.web3.PublicKey.findProgramAddress([Buffer.from(gameId)], programKey.publicKey);
+    console.log({gameId, gamePubKey: gamePubKey.toString()});
     const playerOne = programProvider.wallet;
     const playerTwo = anchor.web3.Keypair.generate();
     await program.methods
-      .setupGame(playerTwo.publicKey)
+      .setupGame(gameId, playerTwo.publicKey)
       .accounts({
-        game: gameKeypair.publicKey,
+        game: gamePubKey,
         playerOne: playerOne.publicKey,
       })
-      .signers([gameKeypair])
       .rpc();
 
-    let gameState = await program.account.game.fetch(gameKeypair.publicKey);
+    let gameState = await program.account.game.fetch(gamePubKey);
     expect(gameState.turn).to.equal(1);
     expect(gameState.players)
       .to
